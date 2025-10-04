@@ -4,7 +4,13 @@ import { signOut } from "aws-amplify/auth";
 
 import Navbar from "../../components/Navbar/Navbar"
 
+import { useNavigate } from "react-router-dom";
+import { URLS } from "../../src/config/navigation";
+
+
 export default function FirmHomePage() {
+
+  const nav = useNavigate();
 
   const [loggingOut, setLoggingOut] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -49,13 +55,13 @@ export default function FirmHomePage() {
               Complete your firm's pitch, and get matched to the right VCs for you - fast.
             </p>
             <div className="mt-10 flex items-center justify-center gap-x-6 lg:justify-start">
-              <a
-                href="#"
-                className="rounded-md bg-white px-3.5 py-2.5 text-sm font-semibold text-gray-900 shadow-xs hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white dark:bg-gray-700 dark:text-white dark:shadow-none dark:inset-ring dark:inset-ring-white/5 dark:hover:bg-gray-600 dark:focus-visible:outline-white"
+              <button
+                onClick={() => nav(URLS.record)}
+                className="rounded-md cursor-pointer bg-white px-3.5 py-2.5 text-sm font-semibold text-gray-900 shadow-xs hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white dark:bg-gray-700 dark:text-white dark:shadow-none dark:inset-ring dark:inset-ring-white/5 dark:hover:bg-gray-600 dark:focus-visible:outline-white"
               >
                 {' '}
                 Start Pitch{' '}
-              </a>
+              </button>
                 <button
                   type="button"
                   onClick={handleLogout}

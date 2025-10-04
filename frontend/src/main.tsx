@@ -22,6 +22,7 @@ import SignUpInvestor from "../components/Auth/SignUpInvestor"
 import SignIn from "../components/Auth/SignIn"
 import HomePage from "../pages/General/HomePage"
 import FirmHomePage from "../pages/Firm/FirmHomePage"
+import RecorderPage from "../pages/Firm/RecorderPage"
 import InvestorHomePage from "../pages/Investor/InvestorHomePage"
 
 
@@ -88,6 +89,15 @@ const router = createBrowserRouter([
                 element: (
                     <FirmRoute>
                         <FirmHomePage />
+                    </FirmRoute>
+                ),
+            },
+
+            {
+                path: URLS.record,
+                element: (
+                    <FirmRoute>
+                        <RecorderPage />
                     </FirmRoute>
                 ),
             },

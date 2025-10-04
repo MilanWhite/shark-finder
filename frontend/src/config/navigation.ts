@@ -9,4 +9,6 @@ export const URLS = {
     firmSignUp: "/firm/signup",
     signIn: "/signin",
 
+    record: "/record"
+
 } as const;
