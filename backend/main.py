@@ -61,12 +61,36 @@ def read_investors(db: Session = Depends(get_db)):
     return db.query(Investor).all()
 
 @app.post("/firms/")
-def create_firm(name: str, industry: str, db: Session = Depends(get_db)):
-    new_firm = Firm(name=name, industry=industry)
+def create_firm(
+    name: str,
+    industry: str | None = None,
+    aum: str | None = None,
+    location: str | None = None,
+    num_investments: int | None = None,
+    age: int | None = None,
+    db: Session = Depends(get_db),
+):
+    new_firm = Firm(
+        name=name,
+        industry=industry,
+        aum=aum,
+        location=location,
+        num_investments=num_investments,
+        age=age,
+    )
     db.add(new_firm)
-    db.commit()
-    db.refresh(new_firm)
-    return new_firm
+    try:
+        db.commit()
+        db.refresh(new_firm)
+        return new_firm
+    except IntegrityError as e:
+        db.rollback()
+        logging.exception("IntegrityError while creating firm")
+        raise HTTPException(status_code=400, detail=str(e.orig))
+    except Exception as e:
+        db.rollback()
+        logging.exception("Unexpected error while creating firm")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @app.get("/firms/")
 def read_firms(db: Session = Depends(get_db)):
