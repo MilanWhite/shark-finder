@@ -40,11 +40,14 @@ export default function SignUpFirm() {
       await confirmSignUp({ username: email, confirmationCode: code.trim() });
       // optional auto sign-in; keep if desired
       await signIn({ username: email, password });
+      window.location.reload();
       // window.location.href = "/app"; // or navigate(...)
     } catch (ex: any) {
       setErr(ex?.message ?? "Confirmation failed");
     } finally {
       setLoading(false);
+
+              
     }
   }
 
