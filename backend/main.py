@@ -13,6 +13,8 @@ from app.models.investor import Investor
 from app.models.firm import Firm
 from typing import Literal, Optional
 
+from sqlalchemy import select
+
 from fastapi import Header, HTTPException
 # Create all tables
 Base.metadata.create_all(bind=engine)
@@ -50,24 +52,39 @@ class InvestorCreate(BaseModel):
     reserved_capital: Optional[str] = None
     meeting_frequency: Optional[Literal["Weekly", "Monthly", "Quarterly"]] = None
 
+
+def _extract_sub_from_auth(authorization: str) -> str:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing/invalid Authorization header")
+    token = authorization.split(" ", 1)[1]
+    try:
+        return jwt.get_unverified_claims(token)["sub"]  # upstream must have verified token
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+
 @app.post("/investor/create-profile")
 def create_investor(
     payload: InvestorCreate,
     authorization: str = Header(..., alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing/invalid Authorization header")
-    token = authorization.split(" ", 1)[1]
+    # if not authorization.startswith("Bearer "):
+    #     raise HTTPException(status_code=401, detail="Missing/invalid Authorization header")
+    # token = authorization.split(" ", 1)[1]
 
-    # Minimal: read sub without network calls (no JWKS). Upstream must have verified the token.
+    # # Minimal: read sub without network calls (no JWKS). Upstream must have verified the token.
     
-    print(jwt.get_unverified_claims(token)["sub"])
+    # print(jwt.get_unverified_claims(token)["sub"])
     
-    try:
-        sub = jwt.get_unverified_claims(token)["sub"]
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    # try:
+    #     sub = jwt.get_unverified_claims(token)["sub"]
+    # except Exception:
+    #     raise HTTPException(status_code=401, detail="Invalid token")
+    
+
+    sub = _extract_sub_from_auth(authorization)
 
     new_investor = Investor(**payload.dict(), cognito_sub=sub)
     db.add(new_investor)
@@ -82,6 +99,38 @@ def create_investor(
         db.rollback()
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+
+
+
+
+
+
+@app.get("/investor/exists")
+def investor_exists(
+    authorization: str = Header(..., alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    sub = _extract_sub_from_auth(authorization)
+    exists = db.execute(
+        select(Investor.cognito_sub).where(Investor.cognito_sub == sub)
+    ).first() is not None
+    return {"exists": exists}
+
+
+@app.get("/firm/exists")
+def firm_exists(
+    authorization: str = Header(..., alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    sub = _extract_sub_from_auth(authorization)
+    exists = db.execute(
+        select(Firm.id).where(Firm.cognito_sub == sub)
+    ).first() is not None
+    return {"exists": exists}
+
+
+
+
 @app.get("/investors/")
 def read_investors(db: Session = Depends(get_db)):
     return db.query(Investor).all()
@@ -90,7 +139,7 @@ def read_investors(db: Session = Depends(get_db)):
 def create_firm(
     name: str,
     industry: str | None = None,
-    aum: str | None = None,
+    aum: str | None = None, 
     location: str | None = None,
     num_investments: int | None = None,
     age: int | None = None,
