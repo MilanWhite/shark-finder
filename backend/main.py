@@ -1,8 +1,10 @@
 # main.py
 from fastapi import FastAPI, Depends, Body, HTTPException
+from jose import jwt
 from sqlalchemy.orm import Session
 import logging
 from sqlalchemy.exc import IntegrityError
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Any, Dict
 from uuid import UUID
@@ -11,70 +13,83 @@ from sqlalchemy import text
 
 # Import database stuff
 from app.database import engine, get_db, Base
-
+from pydantic import BaseModel, EmailStr
 # Import models individually
 from app.models.investor import Investor
 from app.models.firm import Firm
+from typing import Literal, Optional
 
+from fastapi import Header, HTTPException
 # Create all tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
+    allow_headers=["*"],
+)
+
+
 @app.get("/")
 def read_root():
     return {"message": "Hello, FastAPI!"}
 
-# Example endpoints for your actual models
-@app.post("/investors/")
+class InvestorCreate(BaseModel):
+    name: str
+    email: EmailStr
+    risk_tolerance: Optional[Literal["Low", "Medium", "High"]] = None
+    industry: Optional[str] = None
+    years_active: Optional[int] = None
+    num_investments: Optional[int] = None
+    board_seat: Optional[bool] = None
+    location: Optional[str] = None
+    investment_size: Optional[int] = None
+    investment_stage: Optional[Literal["Pre-seed", "Seed", "Series A", "Series B+", "Public"]] = None
+    follow_on_rate: Optional[bool] = None
+    rate_of_return: Optional[str] = None
+    success_rate: Optional[str] = None
+    reserved_capital: Optional[str] = None
+    meeting_frequency: Optional[Literal["Weekly", "Monthly", "Quarterly"]] = None
+
+@app.post("/investor/create-profile")
 def create_investor(
-    name: str ,
-    email: str,
-    risk_tolerance: str | None = None,
-    industry: str | None = None,
-    years_active: int | None = None,
-    num_investments: int | None = None,
-    board_seat: bool | None = None,
-    location: str | None = None,
-    investment_size: int | None = None,
-    investment_stage: str | None = None,
-    follow_on_rate: bool | None = None,
-    rate_of_return: str | None = None,
-    success_rate: str | None = None,
-    reserved_capital: str | None = None,
-    meeting_frequency: str | None = None,
+    payload: InvestorCreate,
+    authorization: str = Header(..., alias="Authorization"),
     db: Session = Depends(get_db),
 ):
+    # Build the new investor from the request payload
     new_investor = Investor(
-        name=name,
-        email=email,
-        risk_tolerance=risk_tolerance,
-        industry=industry,
-        years_active=years_active,
-        num_investments=num_investments,
-        board_seat=board_seat,
-        location=location,
-        investment_size=investment_size,
-        investment_stage=investment_stage,
-        follow_on_rate=follow_on_rate,
-        rate_of_return=rate_of_return,
-        success_rate=success_rate,
-        reserved_capital=reserved_capital,
-        meeting_frequency=meeting_frequency,
+        name=payload.name,
+        email=payload.email,
+        risk_tolerance=payload.risk_tolerance,
+        industry=payload.industry,
+        years_active=payload.years_active,
+        num_investments=payload.num_investments,
+        board_seat=payload.board_seat,
+        location=payload.location,
+        investment_size=payload.investment_size,
+        investment_stage=payload.investment_stage,
+        follow_on_rate=payload.follow_on_rate,
+        rate_of_return=payload.rate_of_return,
+        success_rate=payload.success_rate,
+        reserved_capital=payload.reserved_capital,
+        meeting_frequency=payload.meeting_frequency,
     )
     db.add(new_investor)
     try:
         db.commit()
         db.refresh(new_investor)
         return new_investor
-    except IntegrityError as e:
-        # Roll back the failed transaction and raise a 400 with details
+    except IntegrityError:
         db.rollback()
-        logging.exception("IntegrityError while creating investor")
-        raise HTTPException(status_code=400, detail=str(e.orig))
-    except Exception as e:
+        raise HTTPException(status_code=400, detail="Profile already exists for this user")
+    except Exception:
         db.rollback()
-        logging.exception("Unexpected error while creating investor")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @app.get("/investors/")
@@ -175,6 +190,70 @@ def calculate_investor_match_score(investor: Investor, firm: Firm) -> tuple[floa
         except:
             pass
 
+    # Industry match (15 points)
+    if investor.industry and firm.industry:
+        if investor.industry.lower() == firm.industry.lower():
+            score += 15
+            reasons.append(f"Industry match: {investor.industry}")
+        elif investor.industry.lower() in firm.industry.lower() or firm.industry.lower() in investor.industry.lower():
+            score += 7
+            reasons.append(f"Related industry: {investor.industry} / {firm.industry}")
+
+    # Risk tolerance vs firm stage (10 points)
+    if investor.risk_tolerance and firm.age is not None:
+        # Heuristic: younger firms (age <5) are higher risk
+        if investor.risk_tolerance.lower() == 'high' and firm.age <= 5:
+            score += 10
+            reasons.append('High risk tolerance fits younger firm')
+        elif investor.risk_tolerance.lower() == 'low' and firm.age >= 8:
+            score += 6
+            reasons.append('Low risk tolerance fits mature firm')
+
+    # Follow-on preference (5 points)
+    if investor.follow_on_rate:
+        # If investor likes follow-ons, prefer firms with larger num_investments
+        if firm.num_investments and firm.num_investments >= 10:
+            score += 5
+            reasons.append('Investor prefers follow-ons and firm has active portfolio')
+
+    # Meeting frequency preference (5 points)
+    if investor.meeting_frequency and firm.location:
+        # crude heuristic: local firms preferred for frequent meetings
+        if investor.meeting_frequency.lower() == 'weekly' and investor.location and firm.location and investor.location.lower() == firm.location.lower():
+            score += 5
+            reasons.append('Weekly meeting preference and local firm')
+
+    # Reserved capital and rate_of_return, success_rate (informational boosts)
+    if investor.reserved_capital and firm.aum:
+        try:
+            inv_cap = parse_amount(investor.reserved_capital) if isinstance(investor.reserved_capital, str) else float(investor.reserved_capital)
+            aum_v = parse_amount(firm.aum) if isinstance(firm.aum, str) else float(firm.aum)
+            if inv_cap >= aum_v * 0.01:
+                score += 5
+                reasons.append('Investor has reserved capital sufficient for this firm size')
+        except:
+            pass
+
+    if investor.rate_of_return:
+        # small bonus for higher stated ROI strings (heuristic)
+        if '%' in investor.rate_of_return:
+            try:
+                roi = float(investor.rate_of_return.replace('%',''))
+                if roi >= 20:
+                    score += 3
+                    reasons.append(f'High target return: {roi}%')
+            except:
+                pass
+
+    if investor.success_rate:
+        try:
+            sr = float(investor.success_rate.replace('%',''))
+            if sr >= 60:
+                score += 3
+                reasons.append(f'Success rate: {sr}%')
+        except:
+            pass
+
     # Experience level (20 points)
     if investor.years_active and firm.age:
         if investor.years_active >= firm.age:
@@ -184,14 +263,14 @@ def calculate_investor_match_score(investor: Investor, firm: Firm) -> tuple[floa
             score += 10
             reasons.append(f"Investor has relevant experience")
 
-    # Portfolio size and firm's investment count (15 points)
-    if investor.portfolio_size and firm.num_investments:
-        if investor.portfolio_size >= 10:
+    # Portfolio size (num_investments) and firm's investment count (15 points)
+    if investor.num_investments and firm.num_investments:
+        if investor.num_investments >= 10:
             score += 15
-            reasons.append(f"Experienced investor with {investor.portfolio_size} portfolio companies")
-        elif investor.portfolio_size >= 5:
+            reasons.append(f"Experienced investor with {investor.num_investments} portfolio companies")
+        elif investor.num_investments >= 5:
             score += 8
-            reasons.append(f"Moderate portfolio size: {investor.portfolio_size} companies")
+            reasons.append(f"Moderate portfolio size: {investor.num_investments} companies")
 
     # Board seat preference (15 points)
     if investor.board_seat:
@@ -229,6 +308,46 @@ def calculate_firm_match_score(firm: Firm, investor: Investor) -> tuple[float, L
             elif aum_value > investor.investment_size * 10:
                 score += 15
                 reasons.append(f"Good size match for investment")
+        except:
+            pass
+
+    # Industry relevance (20 points more strongly weighted for firm perspective)
+    if firm.industry and investor.industry:
+        if firm.industry.lower() == investor.industry.lower():
+            score += 20
+            reasons.append(f"Industry match: {firm.industry}")
+        elif firm.industry.lower() in investor.industry.lower() or investor.industry.lower() in firm.industry.lower():
+            score += 10
+            reasons.append(f"Related industry: {firm.industry} / {investor.industry}")
+
+    # Investor risk tolerance vs firm maturity
+    if investor.risk_tolerance and firm.age is not None:
+        if investor.risk_tolerance.lower() == 'high' and firm.age <= 5:
+            score += 10
+            reasons.append('Investor risk tolerance matches young firm')
+        elif investor.risk_tolerance.lower() == 'low' and firm.age >= 8:
+            score += 6
+            reasons.append('Investor risk tolerance matches mature firm')
+
+    # Meeting frequency and location (5 points)
+    if investor.meeting_frequency and firm.location and investor.location:
+        if investor.meeting_frequency.lower() == 'weekly' and investor.location.lower() == firm.location.lower():
+            score += 5
+            reasons.append('Investor prefers frequent meetings and firm is local')
+
+    # Follow-on preference: firms with many investments are attractive to follow-on investors
+    if investor.follow_on_rate and firm.num_investments and firm.num_investments >= 10:
+        score += 5
+        reasons.append('Firm has active portfolio suitable for follow-ons')
+
+    # Reserved capital and firm AUM (small bonus)
+    if investor.reserved_capital and firm.aum:
+        try:
+            inv_cap = parse_amount(investor.reserved_capital) if isinstance(investor.reserved_capital, str) else float(investor.reserved_capital)
+            aum_v = parse_amount(firm.aum) if isinstance(firm.aum, str) else float(firm.aum)
+            if inv_cap >= aum_v * 0.005:
+                score += 4
+                reasons.append('Investor reserved capital aligns with firm size')
         except:
             pass
 
@@ -300,7 +419,7 @@ def get_matching_investors(
     - **min_score**: Minimum match score threshold (0-100, default: 0)
     """
     # Get the firm
-    firm = db.query(Firm).filter(Firm.id == firm_id).first()
+    firm = db.query(Firm).filter(Firm.cognito_sub == firm_id).first()
     if not firm:
         raise HTTPException(status_code=404, detail="Firm not found")
 
@@ -311,26 +430,25 @@ def get_matching_investors(
     for investor in investors:
         score, reasons = calculate_investor_match_score(investor, firm)
 
-        if score >= min_score:
-            matches.append({
-                "investor": {
-                    "id": investor.id,
-                    "name": investor.name,
-                    "email": investor.email,
-                    "years_active": investor.years_active,
-                    "portfolio_size": investor.portfolio_size,
-                    "board_seat": investor.board_seat,
-                    "location": investor.location,
-                    "investment_size": investor.investment_size,
-                },
-                "match_score": round(score, 2),
-                "match_reasons": reasons
-            })
+        matches.append({
+            "investor": {
+                "cognito_sub": investor.cognito_sub,
+                "name": investor.name,
+                "email": investor.email,
+                "years_active": investor.years_active,
+                "num_investments": investor.num_investments,
+                "board_seat": investor.board_seat,
+                "location": investor.location,
+                "investment_size": investor.investment_size,
+            },
+            "match_score": round(score, 2),
+            "match_reasons": reasons
+        })
 
     # Sort by score descending
     matches.sort(key=lambda x: x["match_score"], reverse=True)
 
-    return matches[:limit]
+    return matches[:5]
 
 
 @app.get("/investors/{investor_id}/matching-firms", response_model=List[FirmMatch])
@@ -359,25 +477,24 @@ def get_matching_firms(
     for firm in firms:
         score, reasons = calculate_firm_match_score(firm, investor)
 
-        if score >= min_score:
-            matches.append({
-                "firm": {
-                    "id": firm.id,
-                    "name": firm.name,
-                    "industry": firm.industry,
-                    "aum": firm.aum,
-                    "location": firm.location,
-                    "num_investments": firm.num_investments,
-                    "age": firm.age,
-                },
-                "match_score": round(score, 2),
-                "match_reasons": reasons
-            })
+        matches.append({
+            "firm": {
+                "cognito_sub": firm.cognito_sub,
+                "name": firm.name,
+                "industry": firm.industry,
+                "aum": firm.aum,
+                "location": firm.location,
+                "num_investments": firm.num_investments,
+                "age": firm.age,
+            },
+            "match_score": round(score, 2),
+            "match_reasons": reasons
+        })
 
     # Sort by score descending
     matches.sort(key=lambda x: x["match_score"], reverse=True)
 
-    return matches[:limit]
+    return matches[:5]
 
 
 # Optional: Bulk matching endpoint
@@ -405,9 +522,9 @@ def get_all_matches(
 
             if score >= min_score:
                 all_matches.append({
-                    "investor_id": investor.id,
+                    "investor_id": investor.cognito_sub,
                     "investor_name": investor.name,
-                    "firm_id": firm.id,
+                    "firm_id": firm.cognito_sub,
                     "firm_name": firm.name,
                     "match_score": round(score, 2),
                     "match_reasons": reasons
