@@ -1,75 +1,85 @@
 # main.py
 from fastapi import FastAPI, Depends, Body, HTTPException
+from jose import jwt
 from sqlalchemy.orm import Session
 import logging
 from sqlalchemy.exc import IntegrityError
-
+from fastapi.middleware.cors import CORSMiddleware
 # Import database stuff
 from app.database import engine, get_db, Base
-
+from pydantic import BaseModel, EmailStr
 # Import models individually
 from app.models.investor import Investor
 from app.models.firm import Firm
+from typing import Literal, Optional
 
+from fastapi import Header, HTTPException
 # Create all tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
+    allow_headers=["*"],
+)
+
+
 @app.get("/")
 def read_root():
     return {"message": "Hello, FastAPI!"}
 
-# Example endpoints for your actual models
-@app.post("/investors/")
+class InvestorCreate(BaseModel):
+    name: str
+    email: EmailStr
+    risk_tolerance: Optional[Literal["Low", "Medium", "High"]] = None
+    industry: Optional[str] = None
+    years_active: Optional[int] = None
+    num_investments: Optional[int] = None
+    board_seat: Optional[bool] = None
+    location: Optional[str] = None
+    investment_size: Optional[int] = None
+    investment_stage: Optional[Literal["Pre-seed", "Seed", "Series A", "Series B+", "Public"]] = None
+    follow_on_rate: Optional[bool] = None
+    rate_of_return: Optional[str] = None
+    success_rate: Optional[str] = None
+    reserved_capital: Optional[str] = None
+    meeting_frequency: Optional[Literal["Weekly", "Monthly", "Quarterly"]] = None
+
+@app.post("/investor/create-profile")
 def create_investor(
-    name: str ,
-    email: str,
-    risk_tolerance: str | None = None,
-    industry: str | None = None,
-    years_active: int | None = None,
-    num_investments: int | None = None,
-    board_seat: bool | None = None,
-    location: str | None = None,
-    investment_size: int | None = None,
-    investment_stage: str | None = None,
-    follow_on_rate: bool | None = None,
-    rate_of_return: str | None = None,
-    success_rate: str | None = None,
-    reserved_capital: str | None = None,
-    meeting_frequency: str | None = None,
+    payload: InvestorCreate,
+    authorization: str = Header(..., alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    new_investor = Investor(
-        name=name,
-        email=email,
-        risk_tolerance=risk_tolerance,
-        industry=industry,
-        years_active=years_active,
-        num_investments=num_investments,
-        board_seat=board_seat,
-        location=location,
-        investment_size=investment_size,
-        investment_stage=investment_stage,
-        follow_on_rate=follow_on_rate,
-        rate_of_return=rate_of_return,
-        success_rate=success_rate,
-        reserved_capital=reserved_capital,
-        meeting_frequency=meeting_frequency,
-    )
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing/invalid Authorization header")
+    token = authorization.split(" ", 1)[1]
+
+    # Minimal: read sub without network calls (no JWKS). Upstream must have verified the token.
+    
+    print(jwt.get_unverified_claims(token)["sub"])
+    
+    try:
+        sub = jwt.get_unverified_claims(token)["sub"]
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    new_investor = Investor(**payload.dict(), cognito_sub=sub)
     db.add(new_investor)
     try:
         db.commit()
         db.refresh(new_investor)
         return new_investor
-    except IntegrityError as e:
-        # Roll back the failed transaction and raise a 400 with details
+    except IntegrityError:
         db.rollback()
-        logging.exception("IntegrityError while creating investor")
-        raise HTTPException(status_code=400, detail=str(e.orig))
-    except Exception as e:
+        raise HTTPException(status_code=400, detail="Profile already exists for this user")
+    except Exception:
         db.rollback()
-        logging.exception("Unexpected error while creating investor")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @app.get("/investors/")

@@ -7,7 +7,7 @@ from app.database import Base
 class Investor(Base):
     __tablename__ = "Investors"
 
-    cognito_sub = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cognito_sub = Column(UUID(as_uuid=True), primary_key=True)
     name = Column(String, unique=True,nullable=False)
     email = Column(String, unique=True, nullable=False)
     risk_tolerance = Column(String, nullable=True) # e.g., Low, Medium, High
