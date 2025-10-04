@@ -12,7 +12,7 @@ class Investor(Base):
     email = Column(String, unique=True, nullable=False)
     industry = Column(String, nullable=True)
     years_active = Column(Integer, nullable=True)
-    portfolio_size = Column(Integer, nullable=True)
+    num_investments = Column(Integer, nullable=True)
     board_seat = Column(Boolean, nullable=True)
     location = Column(String, nullable=True)
     investment_size = Column(Integer, nullable=True)
