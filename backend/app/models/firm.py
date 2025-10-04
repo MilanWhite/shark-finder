@@ -5,9 +5,9 @@ from app.database import Base
 
 
 class Firm(Base):
-    __tablename__ = "firms"
+    __tablename__ = "Firms"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cognito_sub = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, nullable=False)
     industry = Column(String)
     aum = Column(String, nullable=True) # Assets Under Management
