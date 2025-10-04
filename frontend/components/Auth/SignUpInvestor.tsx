@@ -46,6 +46,7 @@ export default function SignUpInvestor({ role = "Investor" as Role }) {
 
       // Optional: auto sign-in after successful confirmation
       await signIn({ username: email, password });
+      window.location.reload();
 
       // Navigate as you wish (uncomment if you use a router)
       // window.location.href = "/app";
