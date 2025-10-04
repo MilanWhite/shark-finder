@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import Navbar from "../../components/Navbar";
+import apiClient from "../../services/api-client";
 
 export default function RecorderPage() {
 
@@ -99,28 +100,41 @@ export default function RecorderPage() {
     setRecording(false);
   }
 
-  async function submitToBackend() {
-    if (!chunksRef.current.length) return;
-    setUploading(true);
-    setErr(null);
-    try {
-      const type = mediaRecorderRef.current?.mimeType ?? "video/webm";
-      const file = new File(chunksRef.current, `pitch_${Date.now()}.webm`, { type });
-      const postUrl = `/firm/create-profile`;
+async function submitToBackend() {
+  if (!chunksRef.current?.length) return;
+  setUploading(true);
+  setErr(null);
+  try {
+    const type = mediaRecorderRef.current?.mimeType || "video/webm";
+    const file = new File(chunksRef.current, `pitch_${Date.now()}.webm`, { type });
 
-      const form = new FormData();
-      form.append("file", file);
+    const form = new FormData();
+    form.append("file", file);
 
-      const res = await fetch(postUrl, { method: "POST", body: form });
-      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+    // Prefer no leading slash to avoid // in the URL with baseURL
+    const res = await apiClient.post("firm/create-profile", form, {
+      timeout: 60_000,
+      // onUploadProgress: (e) => setProgress(Math.round((e.loaded / (e.total ?? e.loaded)) * 100)),
+    });
 
+    if (res.status >= 200 && res.status < 300) {
       setUploaded(true);
-    } catch (e: any) {
-      setErr(e?.message ?? "Upload failed");
-    } finally {
-      setUploading(false);
+      // Optional: console.log(res.data?.transcript)
+    } else {
+      throw new Error(`Upload failed: ${res.status}`);
     }
+  } catch (e: any) {
+    if (e?.name === "CanceledError") {
+      setErr("Upload cancelled");
+    } else if (e?.response) {
+      setErr(e.response.data?.detail ?? `Upload failed: ${e.response.status}`);
+    } else {
+      setErr(e?.message ?? "Upload failed");
+    }
+  } finally {
+    setUploading(false);
   }
+}
 
   return (
     <>
