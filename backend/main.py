@@ -1,7 +1,8 @@
 # main.py
-from fastapi import FastAPI, Depends
-from pydantic import BaseModel
+from fastapi import FastAPI, Depends, Body, HTTPException
 from sqlalchemy.orm import Session
+import logging
+from sqlalchemy.exc import IntegrityError
 
 # Import database stuff
 from app.database import engine, get_db, Base
@@ -20,31 +21,40 @@ def read_root():
     return {"message": "Hello, FastAPI!"}
 
 # Example endpoints for your actual models
-class InvestorCreate(BaseModel):
-    name: str
-    email: str
-    years_active: int | None = None
-    portfolio_size: int | None = None
-    board_seat: bool | None = None
-    location: str | None = None
-    investment_size: int | None = None
-
-
 @app.post("/investors/")
-def create_investor(payload: InvestorCreate, db: Session = Depends(get_db)):
+def create_investor(
+    name: str ,
+    email: str,
+    years_active: int | None = None,
+    portfolio_size: int | None = None,
+    board_seat: bool | None = None,
+    location: str | None = None,
+    investment_size: int | None = None,
+    db: Session = Depends(get_db),
+):
     new_investor = Investor(
-        name=payload.name,
-        email=payload.email,
-        years_active=payload.years_active,
-        portfolio_size=payload.portfolio_size,
-        board_seat=payload.board_seat,
-        location=payload.location,
-        investment_size=payload.investment_size,
+        name=name,
+        email=email,
+        years_active=years_active,
+        portfolio_size=portfolio_size,
+        board_seat=board_seat,
+        location=location,
+        investment_size=investment_size,
     )
     db.add(new_investor)
-    db.commit()
-    db.refresh(new_investor)
-    return new_investor
+    try:
+        db.commit()
+        db.refresh(new_investor)
+        return new_investor
+    except IntegrityError as e:
+        # Roll back the failed transaction and raise a 400 with details
+        db.rollback()
+        logging.exception("IntegrityError while creating investor")
+        raise HTTPException(status_code=400, detail=str(e.orig))
+    except Exception as e:
+        db.rollback()
+        logging.exception("Unexpected error while creating investor")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @app.get("/investors/")
 def read_investors(db: Session = Depends(get_db)):
