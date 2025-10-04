@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@aws-amplify/ui-react": "^0.0.0-next-d71feae-20251002121732",
+    "@headlessui/react": "^2.2.9",
     "@tailwindcss/vite": "^4.1.14",
     "aws-amplify": "^6.15.7",
     "class-variance-authority": "^0.7.1",

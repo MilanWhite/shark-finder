@@ -42,7 +42,11 @@ export default function SignUpInvestor({ role = "Investor" as Role }) {
     setErr(null); setLoading(true);
     try {
       // OTP emailed by Cognito; confirm account
-      await confirmSignUp({ username: email, confirmationCode: code.trim() });
+await confirmSignUp({
+  username: email,
+  confirmationCode: code.trim(),
+  options: { clientMetadata: { role } }, // "Investor" by default, or "Firm" if passed
+});
 
       // Optional: auto sign-in after successful confirmation
       await signIn({ username: email, password });

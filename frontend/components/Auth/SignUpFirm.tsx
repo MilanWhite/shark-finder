@@ -37,7 +37,11 @@ export default function SignUpFirm() {
     e.preventDefault();
     setErr(null); setLoading(true);
     try {
-      await confirmSignUp({ username: email, confirmationCode: code.trim() });
+await confirmSignUp({
+  username: email,
+  confirmationCode: code.trim(),
+  options: { clientMetadata: { role: "Firm" } },
+});
       // optional auto sign-in; keep if desired
       await signIn({ username: email, password });
       window.location.reload();
