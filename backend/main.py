@@ -1,9 +1,16 @@
+# main.py
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
-from app import models
-from app.database import SessionLocal, engine
 
-models.Base.metadata.create_all(bind=engine)
+# Import database stuff
+from app.database import engine, get_db, Base
+
+# Import models individually
+from app.models.investor import Investor
+from app.models.firm import Firm
+
+# Create all tables
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
@@ -11,26 +18,27 @@ app = FastAPI()
 def read_root():
     return {"message": "Hello, FastAPI!"}
 
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: str | None = None):
-    return {"item_id": item_id, "q": q}
-
-# Dependency for DB session
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-@app.post("/items/")
-def create_item(name: str, db: Session = Depends(get_db)):
-    new_item = models.Item(name=name)
-    db.add(new_item)
+# Example endpoints for your actual models
+@app.post("/investors/")
+def create_investor(name: str, email: str, db: Session = Depends(get_db)):
+    new_investor = Investor(name=name, email=email)
+    db.add(new_investor)
     db.commit()
-    db.refresh(new_item)
-    return new_item
+    db.refresh(new_investor)
+    return new_investor
 
-@app.get("/items/")
-def read_items(db: Session = Depends(get_db)):
-    return db.query(models.Item).all()
+@app.get("/investors/")
+def read_investors(db: Session = Depends(get_db)):
+    return db.query(Investor).all()
+
+@app.post("/firms/")
+def create_firm(name: str, industry: str, db: Session = Depends(get_db)):
+    new_firm = Firm(name=name, industry=industry)
+    db.add(new_firm)
+    db.commit()
+    db.refresh(new_firm)
+    return new_firm
+
+@app.get("/firms/")
+def read_firms(db: Session = Depends(get_db)):
+    return db.query(Firm).all()
