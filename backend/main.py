@@ -53,7 +53,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.get("/")
 def read_root():
     return {"message": "Hello, FastAPI!"}
@@ -98,14 +97,14 @@ def create_investor(
     # token = authorization.split(" ", 1)[1]
 
     # # Minimal: read sub without network calls (no JWKS). Upstream must have verified the token.
-    
+
     # print(jwt.get_unverified_claims(token)["sub"])
-    
+
     # try:
     #     sub = jwt.get_unverified_claims(token)["sub"]
     # except Exception:
     #     raise HTTPException(status_code=401, detail="Invalid token")
-    
+
 
     sub = _extract_sub_from_auth(authorization)
 
@@ -121,7 +120,7 @@ def create_investor(
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="Internal Server Error")
-    
+
 
 
 
