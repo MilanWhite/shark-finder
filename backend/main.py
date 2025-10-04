@@ -1,5 +1,6 @@
 # main.py
 from fastapi import FastAPI, Depends
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 # Import database stuff
@@ -19,9 +20,27 @@ def read_root():
     return {"message": "Hello, FastAPI!"}
 
 # Example endpoints for your actual models
+class InvestorCreate(BaseModel):
+    name: str
+    email: str
+    years_active: int | None = None
+    portfolio_size: int | None = None
+    board_seat: bool | None = None
+    location: str | None = None
+    investment_size: int | None = None
+
+
 @app.post("/investors/")
-def create_investor(name: str, email: str, db: Session = Depends(get_db)):
-    new_investor = Investor(name=name, email=email)
+def create_investor(payload: InvestorCreate, db: Session = Depends(get_db)):
+    new_investor = Investor(
+        name=payload.name,
+        email=payload.email,
+        years_active=payload.years_active,
+        portfolio_size=payload.portfolio_size,
+        board_seat=payload.board_seat,
+        location=payload.location,
+        investment_size=payload.investment_size,
+    )
     db.add(new_investor)
     db.commit()
     db.refresh(new_investor)
