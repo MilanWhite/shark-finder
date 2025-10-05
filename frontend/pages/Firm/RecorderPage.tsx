@@ -1,9 +1,9 @@
 // pages/RecorderPage.tsx
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { fetchUserAttributes, fetchAuthSession } from "aws-amplify/auth";
 import Navbar from "../../components/Navbar";
 import apiClient from "../../services/api-client";
+import MatchFirmToInvestorsList from "../../components/MatchFirmToInvestorsList";
 
 export default function RecorderPage() {
   // --- firm exists check ---
@@ -13,7 +13,7 @@ export default function RecorderPage() {
   const runExistsCheck = useCallback(async () => {
     setChecking(true);
     try {
-      const res = await apiClient.get("firm/exists");
+      const res = await apiClient.get("/firm/exists");
       setExists(Boolean(res?.data?.exists));
     } catch {
       setExists(false); // on error, treat as not existing
@@ -77,7 +77,9 @@ export default function RecorderPage() {
       : "video/webm";
     const mr = new MediaRecorder(stream, { mimeType: mime, bitsPerSecond: 2_000_000 });
     mediaRecorderRef.current = mr;
-    mr.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
+    mr.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+    };
     mr.onstop = () => {
       try {
         const blob = new Blob(chunksRef.current, { type: mr.mimeType });
@@ -124,7 +126,7 @@ export default function RecorderPage() {
       form.append("file", file);
       if (email) form.append("email", email);
 
-      const res = await apiClient.post("firm/create-profile", form, { timeout: 60_000 });
+      const res = await apiClient.post("/firm/create-profile", form, { timeout: 60_000 });
       if (res.status >= 200 && res.status < 300) setUploaded(true);
       else throw new Error(`Upload failed: ${res.status}`);
     } catch (e: any) {
@@ -137,7 +139,7 @@ export default function RecorderPage() {
     }
   }
 
-  // --- conditional render ---
+  // --- conditional render (mirror FirmHomePage) ---
   if (checking) {
     return (
       <>
@@ -153,14 +155,14 @@ export default function RecorderPage() {
     return (
       <>
         <Navbar />
-        <div className="mx-auto max-w-3xl p-6">
-          <pre className="text-base text-gray-900 dark:text-white">Firm Exists</pre>
+        <div className="max-w-7xl mx-auto">
+          <MatchFirmToInvestorsList />
         </div>
       </>
     );
   }
 
-  // --- regular page (unchanged) ---
+  // --- regular page ---
   return (
     <>
       <Navbar />
@@ -194,7 +196,7 @@ export default function RecorderPage() {
                       <button
                         onClick={initCamera}
                         type="button"
-                        className="rounded-md cursor-pointer bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs inset-ring inset-ring-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-white/10 dark:text-white dark:shadow-none dark:inset-ring-white/5 dark:hover:bg-white/20"
+                        className="rounded-md cursor-pointer bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs inset-ring inset-ring-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg白/10 dark:text-white dark:shadow-none dark:inset-ring-white/5 dark:hover:bg-white/20"
                       >
                         Enable Camera
                       </button>
