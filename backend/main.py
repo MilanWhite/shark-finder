@@ -1,5 +1,9 @@
 # main.py
 
+# matching utilities and schemas
+from app.match import calculate_investor_match_score
+from app.schemas import InvestorMatch, FirmMatch
+
 # Standard library
 import json
 import logging
@@ -53,6 +57,21 @@ app.add_middleware(
     allow_methods=["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
     allow_headers=["*"],
 )
+
+# include match router if present (safe import)
+try:
+    from app.match import router as match_router
+    app.include_router(match_router)
+except Exception:
+    pass
+
+# include match router if available
+try:
+    from app.match import router as match_router
+    app.include_router(match_router)
+except Exception:
+    # keep app usable even if import fails in dev
+    pass
 
 @app.get("/")
 def read_root():
@@ -435,24 +454,87 @@ def read_investors(db: Session = Depends(get_db)):
 def read_firms(db: Session = Depends(get_db)):
     return db.query(Firm).all()
 
-    # main.py (add these endpoints to your existing code)
 
-from typing import List, Dict, Any
-from pydantic import BaseModel
+# Match endpoints (moved into main for easier testing)
+@app.get("/firms/{firm_id}/matching-investors")
+def get_matching_investors(
+    firm_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """
+    Get top N investors that match with a specific firm.
 
-# Response models
-class InvestorMatch(BaseModel):
-    investor: Dict[str, Any]
-    match_score: float
-    match_reasons: List[str]
+    - **firm_id**: ID of the firm to find matches for
+    - **limit**: Maximum number of matches to return (default: 10)
+    - **min_score**: Minimum match score threshold (0-100, default: 0)
+    """
+    # Get the firm
+    firm = db.query(Firm).filter(Firm.cognito_sub == firm_id).first()
+    if not firm:
+        raise HTTPException(status_code=404, detail="Firm not found")
 
-    class Config:
-        from_attributes = True
+    # Get all investors and calculate match scores
+    investors = db.query(Investor).all()
+    matches = []
 
-class FirmMatch(BaseModel):
-    firm: Dict[str, Any]
-    match_score: float
-    match_reasons: List[str]
+    for investor in investors:
+        score = calculate_investor_match_score(investor, firm)
 
-    class Config:
-        from_attributes = True
+        matches.append({
+            "investor": {
+                "name": investor.name,
+                "email": investor.email,
+                "num_investments": investor.num_investments,
+                "industry": investor.industry,
+                "location": investor.location,
+            },
+            "match_score": score
+        })
+
+    # Sort by score descending
+    matches.sort(key=lambda x: x["match_score"], reverse=True)
+
+    return matches[:5]
+
+
+@app.get("/investors/{investor_id}/matching-firms")
+def get_matching_firms(
+    investor_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """
+    Get top N firms that match with a specific investor.
+
+    - **investor_id**: ID of the investor to find matches for
+    - **limit**: Maximum number of matches to return (default: 10)
+    - **min_score**: Minimum match score threshold (0-100, default: 0)
+    """
+    # Get the investor
+    # fetch investor by cognito_sub
+    investor = db.query(Investor).filter(Investor.cognito_sub == investor_id).first()
+    if not investor:
+        raise HTTPException(status_code=404, detail="Investor not found")
+
+    # Get all firms and calculate match scores
+    firms = db.query(Firm).all()
+    matches = []
+
+    for firm in firms:
+        score = calculate_investor_match_score(investor, firm)
+
+        matches.append({
+            "firm": {
+                "name": firm.name,
+                "email": firm.email,
+                "industry": firm.industry,
+                "location": firm.location,
+                "num_investments": firm.num_investments
+            },
+            "match_score": score
+        })
+
+    # Sort by score descending
+    matches.sort(key=lambda x: x["match_score"], reverse=True)
+
+    return matches[:5]
+

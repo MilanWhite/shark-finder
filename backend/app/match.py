@@ -1,20 +1,22 @@
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Tuple
 from uuid import UUID
 
-from fastapi import Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.investor import Investor
 from app.models.firm import Firm
-from fastapi import APIRouter
-from pydantic import BaseModel
+from app.schemas import InvestorMatch, FirmMatch
+
+# Router
+router = APIRouter()
 
 
+def calculate_investor_match_score(investor: Investor, firm: Firm) -> Tuple[float, List[str]]:
+    """Calculate how well an investor matches with a firm.
 
-def calculate_investor_match_score(investor: Investor, firm: Firm) -> tuple[float, List[str]]:
-    """
-    Calculate how well an investor matches with a firm.
+    Returns (score, reasons)
     """
     score = 0.0
 
@@ -28,7 +30,7 @@ def calculate_investor_match_score(investor: Investor, firm: Firm) -> tuple[floa
     # Risk tolerance vs firm stage (10 points)
     if investor.risk_tolerance and firm.risk_tolerance:
         # Heuristic: younger firms (age <5) are higher risk
-        if investor.risk_tolerance.lower() == firm.risk_tolerance.lower:
+        if investor.risk_tolerance.lower() == firm.risk_tolerance.lower():
             score += 10
         elif (investor.risk_tolerance.lower() == 'high' and firm.risk_tolerance == "medium" or
               investor.risk_tolerance.lower() == 'medium' and firm.risk_tolerance == "high" or
@@ -151,11 +153,9 @@ def format_amount(amount: float) -> str:
     return f"{amount:.0f}"
 
 
-@app.get("/firms/{firm_id}/matching-investors", response_model=List[InvestorMatch])
+@router.get("/firms/{firm_id}/matching-investors")
 def get_matching_investors(
     firm_id: UUID,
-    limit: int = 10,
-    min_score: float = 0.0,
     db: Session = Depends(get_db)
 ):
     """
@@ -179,16 +179,13 @@ def get_matching_investors(
 
         matches.append({
             "investor": {
-                "cognito_sub": investor.cognito_sub,
                 "name": investor.name,
                 "email": investor.email,
-                "years_active": investor.years_active,
                 "num_investments": investor.num_investments,
-                "board_seat": investor.board_seat,
+                "industry": investor.industry,
                 "location": investor.location,
-                "investment_size": investor.investment_size,
             },
-            "match_score": round(score, 2)
+            "match_score": score
         })
 
     # Sort by score descending
@@ -197,11 +194,9 @@ def get_matching_investors(
     return matches[:5]
 
 
-@app.get("/investors/{investor_id}/matching-firms", response_model=List[FirmMatch])
+@router.get("/investors/{investor_id}/matching-firms")
 def get_matching_firms(
     investor_id: UUID,
-    limit: int = 10,
-    min_score: float = 0.0,
     db: Session = Depends(get_db)
 ):
     """
@@ -212,6 +207,7 @@ def get_matching_firms(
     - **min_score**: Minimum match score threshold (0-100, default: 0)
     """
     # Get the investor
+    # fetch investor by cognito_sub
     investor = db.query(Investor).filter(Investor.cognito_sub == investor_id).first()
     if not investor:
         raise HTTPException(status_code=404, detail="Investor not found")
@@ -221,63 +217,20 @@ def get_matching_firms(
     matches = []
 
     for firm in firms:
-        score = investor(investor, firm)
+        score = calculate_investor_match_score(investor, firm)
 
         matches.append({
             "firm": {
-                "cognito_sub": firm.cognito_sub,
                 "name": firm.name,
+                "email": firm.email,
                 "industry": firm.industry,
-                "aum": firm.aum,
                 "location": firm.location,
-                "num_investments": firm.num_investments,
-                "age": firm.age,
+                "num_investments": firm.num_investments
             },
-            "match_score": round(score, 2)
+            "match_score": score
         })
 
     # Sort by score descending
     matches.sort(key=lambda x: x["match_score"], reverse=True)
 
     return matches[:5]
-
-
-# Optional: Bulk matching endpoint
-@app.get("/matching/investors-firms", response_model=Dict[str, Any])
-def get_all_matches(
-    limit_per_entity: int = 5,
-    min_score: float = 30.0,
-    db: Session = Depends(get_db)
-):
-    """
-    Get all investor-firm matches above a threshold.
-    Useful for generating a matching matrix.
-
-    - **limit_per_entity**: Max matches per investor/firm
-    - **min_score**: Minimum match score threshold
-    """
-    investors = db.query(Investor).all()
-    firms = db.query(Firm).all()
-
-    all_matches = []
-
-    for investor in investors:
-        for firm in firms:
-            score = calculate_investor_match_score(investor, firm)
-
-            if score >= min_score:
-                all_matches.append({
-                    "investor_id": investor.cognito_sub,
-                    "investor_name": investor.name,
-                    "firm_id": firm.cognito_sub,
-                    "firm_name": firm.name,
-                    "match_score": round(score, 2)
-                })
-
-    # Sort by score
-    all_matches.sort(key=lambda x: x["match_score"], reverse=True)
-
-    return {
-        "total_matches": len(all_matches),
-        "matches": all_matches[:100]  # Limit to top 100
-    }
