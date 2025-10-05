@@ -73,16 +73,16 @@ await confirmSignUp({
   }
 
   return (
-    <div className="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
+    <div className="flex min-h-full flex-col justify-center px-6 py-30 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-sm">
         <img
           alt="Your Company"
-          src="https://tailwindcss.com/plus-assets/img/logos/mark.svg?color=indigo&shade=600"
+          src="../../src/assets/SharkFinderLogoSmall.png"
           className="mx-auto h-10 w-auto dark:hidden"
         />
         <img
           alt="Your Company"
-          src="https://tailwindcss.com/plus-assets/img/logos/mark.svg?color=indigo&shade=500"
+          src="../../src/assets/SharkFinderLogoSmall.png"
           className="mx-auto h-10 w-auto not-dark:hidden"
         />
         <h2 className="mt-10 text-center text-2xl/9 font-bold tracking-tight text-gray-900 dark:text-white">
@@ -184,10 +184,9 @@ await confirmSignUp({
           </form>
         )}
 
-        <p className="mt-10 text-center text-sm/6 text-gray-500 dark:text-gray-400">
-          Already have an account?{" "}
-          <a href="/login" className="font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
-            Sign in
+        <p className="mt-2 text-right text-center text-sm/6 text-gray-500 dark:text-gray-400">
+          <a href="/" className="font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+            Go Back
           </a>
         </p>
       </div>

@@ -3,16 +3,18 @@ import { Globe } from "../../../frontend/src/components/ui/globe";
 
 export default function HomePage() {
   return (
-    <div className="relative min-h-svh w-full overflow-hidden rounded-lg border px-6 py-12 md:px-40 md:pt-16 md:pb-60">
-      
+    <div className="relative min-h-svh w-full overflow-hidden rounded-lg border px-6 py-12 md:px-40 md:pt-12 md:pb-60">
+      <img
+  src="../../src/assets/SharkFinderLogo.png"        // put your image in /public/assets/
+  alt="Shark Finder"
+  className="mx-auto w-[min(90vw,48rem)] select-none pointer-events-none"
+/>
       
       <div className="relative z-20 mx-auto flex max-w-3xl flex-col items-center gap-8 text-center">
               {/* 2) Fullscreen video; black removed via mix-blend-screen */}
 
         
-        <h1 className="text-5xl font-semibold tracking-tight text-balance text-gray-900 dark:text-white sm:text-7xl">
-          Shark Finder
-        </h1>
+
 
         <div className="flex flex-col items-center gap-3 sm:flex-row">
           <a
@@ -40,7 +42,7 @@ export default function HomePage() {
       <Globe
         className="
           absolute z-10
-          w-[100vh] top-50 aspect-square
+          w-[100vh] top-70 aspect-square
         "
       />
 

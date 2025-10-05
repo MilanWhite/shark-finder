@@ -6,6 +6,8 @@ import Navbar from "../../components/Navbar/Navbar";
 import { Globe } from "../../../frontend/src/components/ui/globe";
 import { URLS } from "../../src/config/navigation";
 
+import MatchList from "../../components/MatchInverstorToFirmsList";
+
 export default function FirmHomePage() {
   const nav = useNavigate();
 
@@ -18,7 +20,6 @@ export default function FirmHomePage() {
     setChecking(true);
     try {
       const res = await apiClient.get("/firm/exists");
-      console.log(res)
       setExists(Boolean(res?.data?.exists));
     } catch (e: any) {
       // On error, treat as non-existent and proceed normally
@@ -50,7 +51,9 @@ export default function FirmHomePage() {
       <>
         <Navbar />
         <div className="flex min-h-svh items-center justify-center">
-          <div className="text-sm text-gray-600 dark:text-gray-300">Loading…</div>
+          <div className="text-sm text-gray-600 dark:text-gray-300">
+            Loading…
+          </div>
         </div>
       </>
     );
@@ -61,8 +64,9 @@ export default function FirmHomePage() {
     return (
       <>
         <Navbar />
-        <div className="mx-auto max-w-3xl p-6">
-          <pre className="text-base text-gray-900 dark:text-white">Firm Exists</pre>
+
+        <div className="max-w-7xl  mx-auto">
+          <MatchList />
         </div>
       </>
     );
@@ -70,7 +74,7 @@ export default function FirmHomePage() {
 
   // Default (doesn’t exist)
   return (
-    <>
+    <div className="h-[100vh] overflow-hidden">
       <Navbar />
 
       <div className="relative -top-16 h-[100vh] bg-white dark:bg-gray-900 overflow-hidden">
@@ -81,7 +85,13 @@ export default function FirmHomePage() {
               aria-hidden="true"
               className="absolute top-1/2 left-1/2 -z-10 size-256 -translate-y-1/2 mask-[radial-gradient(closest-side,white,transparent)] sm:left-full sm:-ml-80 lg:left-1/2 lg:ml-0 lg:-translate-x-1/2 lg:translate-y-0"
             >
-              <circle r={512} cx={512} cy={512} fill="url(#759c1415-0410-454c-8f7c-9a820de03641)" fillOpacity="0.7" />
+              <circle
+                r={512}
+                cx={512}
+                cy={512}
+                fill="url(#759c1415-0410-454c-8f7c-9a820de03641)"
+                fillOpacity="0.7"
+              />
               <defs>
                 <radialGradient id="759c1415-0410-454c-8f7c-9a820de03641">
                   <stop stopColor="#7775D6" />
@@ -95,7 +105,8 @@ export default function FirmHomePage() {
                 A Great VC Investor is One Pitch Away.
               </h2>
               <p className="mt-6 text-lg/8 text-pretty text-gray-300">
-                Complete your firm's pitch, and get matched to the right VCs for you - fast.
+                Complete your firm's pitch, and get matched to the right VCs for
+                you - fast.
               </p>
               <div className="mt-10 flex items-center justify-center gap-x-6 lg:justify-start">
                 <button
@@ -113,11 +124,7 @@ export default function FirmHomePage() {
                   {loggingOut ? "Logging out..." : "Log Out"}
                 </button>
               </div>
-              {err && (
-                <div className="mt-4 text-sm text-amber-300">
-                  {err}
-                </div>
-              )}
+              {err && <div className="mt-4 text-sm text-amber-300">{err}</div>}
             </div>
           </div>
         </div>
@@ -129,6 +136,6 @@ export default function FirmHomePage() {
           "
         />
       </div>
-    </>
+    </div>
   );
 }

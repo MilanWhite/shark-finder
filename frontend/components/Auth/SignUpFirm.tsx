@@ -37,12 +37,11 @@ export default function SignUpFirm() {
     e.preventDefault();
     setErr(null); setLoading(true);
     try {
-await confirmSignUp({
-  username: email,
-  confirmationCode: code.trim(),
-  options: { clientMetadata: { role: "Firm" } },
-});
-      // optional auto sign-in; keep if desired
+      await confirmSignUp({
+        username: email,
+        confirmationCode: code.trim(),
+        options: { clientMetadata: { role: "Firm" } },
+      });
       await signIn({ username: email, password });
       window.location.reload();
       // window.location.href = "/app"; // or navigate(...)
@@ -50,8 +49,6 @@ await confirmSignUp({
       setErr(ex?.message ?? "Confirmation failed");
     } finally {
       setLoading(false);
-
-              
     }
   }
 
@@ -67,16 +64,16 @@ await confirmSignUp({
   }
 
   return (
-    <div className="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
+    <div className="flex min-h-full flex-col justify-center px-6 py-30 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-sm">
         <img
           alt="Your Company"
-          src="https://tailwindcss.com/plus-assets/img/logos/mark.svg?color=indigo&shade=600"
+          src="../../src/assets/SharkFinderLogoSmall.png"
           className="mx-auto h-10 w-auto dark:hidden"
         />
         <img
           alt="Your Company"
-          src="https://tailwindcss.com/plus-assets/img/logos/mark.svg?color=indigo&shade=500"
+          src="../../src/assets/SharkFinderLogoSmall.png"
           className="mx-auto h-10 w-auto not-dark:hidden"
         />
         <h2 className="mt-10 text-center text-2xl/9 font-bold tracking-tight text-gray-900 dark:text-white">
@@ -106,19 +103,9 @@ await confirmSignUp({
             </div>
 
             <div>
-              <div className="flex items-center justify-between">
-                <label htmlFor="password" className="block text-sm/6 font-medium text-gray-900 dark:text-gray-100">
-                  Password
-                </label>
-                <div className="text-sm">
-                  <a
-                    href="/forgot-password"
-                    className="font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
-                  >
-                    Forgot password?
-                  </a>
-                </div>
-              </div>
+              <label htmlFor="password" className="block text-sm/6 font-medium text-gray-900 dark:text-gray-100">
+                Password
+              </label>
               <div className="mt-2">
                 <input
                   id="password"
@@ -188,10 +175,9 @@ await confirmSignUp({
           </form>
         )}
 
-        <p className="mt-10 text-center text-sm/6 text-gray-500 dark:text-gray-400">
-          Already have an account?{" "}
-          <a href="/login" className="font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
-            Sign in
+        <p className="mt-2 text-right text-center text-sm/6 text-gray-500 dark:text-gray-400">
+          <a href="/" className="font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+            Go Back
           </a>
         </p>
       </div>
