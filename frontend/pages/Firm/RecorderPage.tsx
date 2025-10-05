@@ -1,29 +1,42 @@
 // pages/RecorderPage.tsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-
+import { fetchUserAttributes, fetchAuthSession } from "aws-amplify/auth";
 import Navbar from "../../components/Navbar";
 import apiClient from "../../services/api-client";
 
 export default function RecorderPage() {
+  // --- firm exists check ---
+  const [checking, setChecking] = useState(true);
+  const [exists, setExists] = useState<boolean | null>(null);
 
-  // Recorder state
+  const runExistsCheck = useCallback(async () => {
+    setChecking(true);
+    try {
+      const res = await apiClient.get("firm/exists");
+      setExists(Boolean(res?.data?.exists));
+    } catch {
+      setExists(false); // on error, treat as not existing
+    } finally {
+      setChecking(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    runExistsCheck();
+  }, [runExistsCheck]);
+
+  // --- recorder state (unchanged) ---
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-
-  // Per-recording chunk buffer
   const chunksRef = useRef<Blob[]>([]);
-
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [recording, setRecording] = useState(false);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-
-  // Preview modal
   const [showPreview, setShowPreview] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState(false);
-
   const MAX_MS = 4 * 60_000; // 4:00
 
   useEffect(() => {
@@ -53,25 +66,18 @@ export default function RecorderPage() {
     setUploaded(false);
     setShowPreview(false);
     chunksRef.current = [];
-
     if (blobUrl) {
       URL.revokeObjectURL(blobUrl);
       setBlobUrl(null);
     }
-
     const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
       ? "video/webm;codecs=vp9,opus"
       : MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")
       ? "video/webm;codecs=vp8,opus"
       : "video/webm";
-
     const mr = new MediaRecorder(stream, { mimeType: mime, bitsPerSecond: 2_000_000 });
     mediaRecorderRef.current = mr;
-
-    mr.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
-    };
-
+    mr.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
     mr.onstop = () => {
       try {
         const blob = new Blob(chunksRef.current, { type: mr.mimeType });
@@ -82,10 +88,8 @@ export default function RecorderPage() {
         setErr(e?.message ?? "Failed to create preview");
       }
     };
-
     mr.start(1000);
     setRecording(true);
-
     if (MAX_MS > 0) {
       setTimeout(() => {
         if (mediaRecorderRef.current?.state === "recording") stop();
@@ -94,84 +98,90 @@ export default function RecorderPage() {
   }
 
   function stop() {
-    if (mediaRecorderRef.current?.state === "recording") {
-      mediaRecorderRef.current.stop();
-    }
+    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
     setRecording(false);
   }
 
-async function submitToBackend() {
-  if (!chunksRef.current?.length) return;
-  setUploading(true);
-  setErr(null);
-  try {
-    const type = mediaRecorderRef.current?.mimeType || "video/webm";
-    const file = new File(chunksRef.current, `pitch_${Date.now()}.webm`, { type });
+  async function submitToBackend() {
+    if (!chunksRef.current?.length) return;
+    setUploading(true);
+    setErr(null);
+    try {
+      const type = mediaRecorderRef.current?.mimeType || "video/webm";
+      const file = new File(chunksRef.current, `pitch_${Date.now()}.webm`, { type });
 
-    const form = new FormData();
-    form.append("file", file);
+      let email = "";
+      try {
+        const attrs = await fetchUserAttributes();
+        email = attrs.email ?? "";
+        if (!email) {
+          const { tokens } = await fetchAuthSession();
+          email = (tokens?.idToken as any)?.payload?.email ?? "";
+        }
+      } catch {}
 
-    // Prefer no leading slash to avoid // in the URL with baseURL
-    const res = await apiClient.post("firm/create-profile", form, {
-      timeout: 60_000,
-      // onUploadProgress: (e) => setProgress(Math.round((e.loaded / (e.total ?? e.loaded)) * 100)),
-    });
+      const form = new FormData();
+      form.append("file", file);
+      if (email) form.append("email", email);
 
-    if (res.status >= 200 && res.status < 300) {
-      setUploaded(true);
-      // Optional: console.log(res.data?.transcript)
-    } else {
-      throw new Error(`Upload failed: ${res.status}`);
+      const res = await apiClient.post("firm/create-profile", form, { timeout: 60_000 });
+      if (res.status >= 200 && res.status < 300) setUploaded(true);
+      else throw new Error(`Upload failed: ${res.status}`);
+    } catch (e: any) {
+      if (e?.name === "CanceledError") setErr("Upload cancelled");
+      else if (e?.response) setErr(e.response.data?.detail ?? `Upload failed: ${e.response.status}`);
+      else setErr(e?.message ?? "Upload failed");
+    } finally {
+      setUploading(false);
+      window.location.reload();
     }
-  } catch (e: any) {
-    if (e?.name === "CanceledError") {
-      setErr("Upload cancelled");
-    } else if (e?.response) {
-      setErr(e.response.data?.detail ?? `Upload failed: ${e.response.status}`);
-    } else {
-      setErr(e?.message ?? "Upload failed");
-    }
-  } finally {
-    setUploading(false);
   }
-}
 
+  // --- conditional render ---
+  if (checking) {
+    return (
+      <>
+        <Navbar />
+        <div className="flex min-h-svh items-center justify-center">
+          <div className="text-sm text-gray-600 dark:text-gray-300">Loading…</div>
+        </div>
+      </>
+    );
+  }
+
+  if (exists === true) {
+    return (
+      <>
+        <Navbar />
+        <div className="mx-auto max-w-3xl p-6">
+          <pre className="text-base text-gray-900 dark:text-white">Firm Exists</pre>
+        </div>
+      </>
+    );
+  }
+
+  // --- regular page (unchanged) ---
   return (
     <>
       <Navbar />
       <div className="min-h-screen w-full bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-13">
-            {/* LEFT: put title, session id, max length here (1/4) */}
             <aside className="lg:col-span-4">
-
-
-                
-                                <h1 className="text-3xl mb-5 font-bold tracking-tight sm:text-4xl">
-                  Record Your Pitch
-                </h1>   
-
-
+              <h1 className="text-3xl mb-5 font-bold tracking-tight sm:text-4xl">Record Your Pitch</h1>
               <section className="sticky top-6 rounded-2xl border border-gray-200 bg-gray-50 p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900/60">
-
-
                 <dl className="text-sm">
-                  <div className="flex items-start justify-between gap-3">
-
-                  </div>
                   <div className="flex items-center justify-between">
                     <dt className="text-gray-600 dark:text-gray-400">Max length</dt>
                     <dd className="font-medium text-gray-900 dark:text-gray-100">4:00</dd>
                   </div>
                 </dl>
-
                 <p className="mt-6 text-sm text-gray-700 dark:text-gray-300">
                   Enable the camera, record, then review and submit from the preview popup.
                 </p>
               </section>
             </aside>
 
-            {/* RIGHT: live video + controls (3/4) */}
             <main className="lg:col-span-9">
               <div className="relative overflow-hidden rounded-3xl border border-gray-200 bg-gradient-to-b from-gray-50 to-white shadow-xl dark:border-gray-800 dark:from-gray-900 dark:to-gray-950">
                 <div className="p-3 sm:p-4 lg:p-6">
@@ -180,52 +190,53 @@ async function submitToBackend() {
                       <video ref={videoRef} playsInline autoPlay muted className="h-full w-full object-cover" />
                     </div>
 
-<div className="mt-4 flex flex-wrap gap-2">
-  {/* Enable Camera — neutral / secondary */}
-  <button
-    onClick={initCamera}
-    type="button"
-    className="rounded-md cursor-pointer bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs inset-ring inset-ring-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-white/10 dark:text-white dark:shadow-none dark:inset-ring-white/5 dark:hover:bg-white/20"
-  >
-    Enable Camera
-  </button>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        onClick={initCamera}
+                        type="button"
+                        className="rounded-md cursor-pointer bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs inset-ring inset-ring-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-white/10 dark:text-white dark:shadow-none dark:inset-ring-white/5 dark:hover:bg-white/20"
+                      >
+                        Enable Camera
+                      </button>
 
-  {/* Record / Stop — primary / danger */}
-  {!recording ? (
-    <button
-      onClick={start}
-      type="button"
-      disabled={!stream}
-      className={`rounded-md cursor-pointer px-3 py-2 text-sm font-semibold text-white shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 dark:shadow-none
-        ${!stream
-          ? "bg-indigo-600/60 cursor-not-allowed"
-          : "bg-indigo-600 hover:bg-indigo-500 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:outline-indigo-500"}`}
-    >
-      Record
-    </button>
-  ) : (
-    <button
-      onClick={stop}
-      type="button"
-      className="rounded-md cursor-pointer bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:bg-red-500 dark:shadow-none dark:hover:bg-red-400 dark:focus-visible:outline-red-500"
-    >
-      Stop
-    </button>
-  )}
+                      {!recording ? (
+                        <button
+                          onClick={start}
+                          type="button"
+                          disabled={!stream}
+                          className={`rounded-md cursor-pointer px-3 py-2 text-sm font-semibold text-white shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 dark:shadow-none
+                            ${
+                              !stream
+                                ? "bg-indigo-600/60 cursor-not-allowed"
+                                : "bg-indigo-600 hover:bg-indigo-500 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:outline-indigo-500"
+                            }`}
+                        >
+                          Record
+                        </button>
+                      ) : (
+                        <button
+                          onClick={stop}
+                          type="button"
+                          className="rounded-md cursor-pointer bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:bg-red-500 dark:shadow-none dark:hover:bg-red-400 dark:focus-visible:outline-red-500"
+                        >
+                          Stop
+                        </button>
+                      )}
 
-  {/* Open Preview — subtle / tertiary */}
-  <button
-    onClick={() => blobUrl && setShowPreview(true)}
-    type="button"
-    disabled={!blobUrl}
-    className={`cursor-pointer rounded-md px-3 py-2 text-sm font-semibold shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2
-      ${!blobUrl
-        ? "bg-indigo-500/60 text-indigo-50/60 cursor-not-allowed"
-        : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100 focus-visible:outline-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 dark:hover:bg-indigo-500/30 dark:shadow-none"}`}
-  >
-    Open Preview
-  </button>
-</div>
+                      <button
+                        onClick={() => blobUrl && setShowPreview(true)}
+                        type="button"
+                        disabled={!blobUrl}
+                        className={`cursor-pointer rounded-md px-3 py-2 text-sm font-semibold shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2
+                          ${
+                            !blobUrl
+                              ? "bg-indigo-500/60 text-indigo-50/60 cursor-not-allowed"
+                              : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100 focus-visible:outline-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 dark:hover:bg-indigo-500/30 dark:shadow-none"
+                          }`}
+                      >
+                        Open Preview
+                      </button>
+                    </div>
 
                     {err && <p className="mt-3 text-sm text-red-600">{err}</p>}
                   </div>
@@ -235,7 +246,6 @@ async function submitToBackend() {
           </div>
         </div>
 
-        {/* Preview Modal */}
         {showPreview && (
           <div
             className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
