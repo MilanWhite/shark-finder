@@ -2,7 +2,6 @@
 
 # matching utilities and schemas
 from app.match import calculate_investor_match_score
-from app.schemas import InvestorMatch, FirmMatch
 
 # Standard library
 import json
@@ -470,7 +469,7 @@ def get_matching_investors(
     """
     # Get the firm
     firm = db.query(Firm).filter(Firm.cognito_sub == firm_id).first()
-    if not firm:
+    if not firm:    
         raise HTTPException(status_code=404, detail="Firm not found")
 
     # Get all investors and calculate match scores
@@ -528,7 +527,7 @@ def get_matching_firms(
                 "email": firm.email,
                 "industry": firm.industry,
                 "location": firm.location,
-                "num_investments": firm.num_investments
+                "risk_tolerance": firm.risk_tolerance
             },
             "match_score": score
         })

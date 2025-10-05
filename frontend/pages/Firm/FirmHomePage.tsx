@@ -6,7 +6,7 @@ import Navbar from "../../components/Navbar/Navbar";
 import { Globe } from "../../../frontend/src/components/ui/globe";
 import { URLS } from "../../src/config/navigation";
 
-import MatchList from "../../components/MatchInverstorToFirmsList";
+import MatchFirmToInvestorsList from "../../components/MatchFirmToInvestorsList";
 
 export default function FirmHomePage() {
   const nav = useNavigate();
@@ -66,7 +66,7 @@ export default function FirmHomePage() {
         <Navbar />
 
         <div className="max-w-7xl  mx-auto">
-          <MatchList />
+          <MatchFirmToInvestorsList />
         </div>
       </>
     );

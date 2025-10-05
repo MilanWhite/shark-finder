@@ -5,6 +5,8 @@ import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import apiClient, { abortAllRequests } from "../../services/api-client";
 import Navbar from "../../components/Navbar/Navbar";
 
+import MatchInvestorToFirmsList from "../../components/MatchInvestorToFirmsList"
+
 type InvestorFormPayload = {
   name: string;
   email: string;
@@ -162,8 +164,9 @@ export default function InvestorHomePage() {
     return (
       <>
         <Navbar />
-        <div className="mx-auto max-w-3xl p-6">
-          <pre className="text-base text-gray-900 dark:text-white">User exists</pre>
+
+        <div className="max-w-7xl  mx-auto">
+          <MatchInvestorToFirmsList />
         </div>
       </>
     );
